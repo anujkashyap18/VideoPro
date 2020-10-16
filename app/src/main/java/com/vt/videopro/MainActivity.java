@@ -1,24 +1,29 @@
 package com.vt.videopro;
 
 import android.app.AlertDialog;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaCodec;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.DocumentsContract;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.MediaController;
+import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -35,7 +40,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.github.hiteshsondhi88.libffmpeg.ExecuteBinaryResponseHandler;
 import com.github.hiteshsondhi88.libffmpeg.FFmpeg;
 import com.github.hiteshsondhi88.libffmpeg.LoadBinaryResponseHandler;
-import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegNotSupportedException;
 import com.vt.videopro.stickerUtils.FontProvider;
 import com.vt.videopro.stickerUtils.ImageEntity;
 import com.vt.videopro.stickerUtils.Layer;
@@ -95,6 +99,43 @@ public class MainActivity extends AppCompatActivity {
 	FFmpeg ffmpeg;
 	private boolean weAreInterestedInThisTrack;
 	private FontProvider fontProvider;
+	ProgressBar progressBar;
+
+	public static boolean isExternalStorageDocument ( Uri uri ) {
+		return "com.android.externalstorage.documents".equals ( uri.getAuthority ( ) );
+	}
+
+	public static boolean isDownloadsDocument ( Uri uri ) {
+		return "com.android.providers.downloads.documents".equals ( uri.getAuthority ( ) );
+	}
+
+	public static boolean isMediaDocument ( Uri uri ) {
+		return "com.android.providers.media.documents".equals ( uri.getAuthority ( ) );
+	}
+
+	public static boolean isGooglePhotosUri ( Uri uri ) {
+		return "com.google.android.apps.photos.content".equals ( uri.getAuthority ( ) );
+	}
+
+	public static String getDataColumn ( Context context , Uri uri , String selection , String[] selectionArgs ) {
+
+		Cursor cursor = null;
+		final String column = "_data";
+		final String[] projection = { column };
+
+		try {
+			cursor = context.getContentResolver ( ).query ( uri , projection , selection , selectionArgs , null );
+			if ( cursor != null && cursor.moveToFirst ( ) ) {
+				final int column_index = cursor.getColumnIndexOrThrow ( column );
+				return cursor.getString ( column_index );
+			}
+		} finally {
+			if ( cursor != null ) {
+				cursor.close ( );
+			}
+		}
+		return null;
+	}
 
 	@Override
 	protected void onCreate ( Bundle savedInstanceState ) {
@@ -114,6 +155,7 @@ public class MainActivity extends AppCompatActivity {
 		stickerLayout = findViewById ( R.id.sticker_rec_view );
 		ImageView emo = findViewById ( R.id.sticker_show );
 		ImageView save = findViewById ( R.id.save );
+		progressBar = findViewById ( R.id.progreess );
 
 		emo.setOnClickListener ( new View.OnClickListener ( ) {
 			@Override
@@ -160,20 +202,13 @@ public class MainActivity extends AppCompatActivity {
 				ffmpeg = FFmpeg.getInstance ( MainActivity.this );
 
 				try {
-					ffmpeg.loadBinary ( new LoadBinaryResponseHandler ( ) );
-				} catch ( FFmpegNotSupportedException e ) {
-					e.printStackTrace ( );
-				}
-				try {
 					File basePath = new File ( Environment.getExternalStorageDirectory ( ) , MainActivity.this.getString ( R.string.app_name ) );
 
 					if ( ! basePath.exists ( ) ) {
 						basePath.mkdirs ( );
 					}
-					File videoOutput = new File ( basePath , System.currentTimeMillis ( ) + "test_video.mp4" );
-					if ( ! videoOutput.exists ( ) ) {
-						videoOutput.mkdirs ( );
-					}
+					String videoOutput = Environment.getExternalStorageDirectory ( ).getAbsolutePath ( ) + "/Download/" + System.currentTimeMillis ( ) + "test_video.mp4";
+
 					View view = relative;
 					view.setDrawingCacheEnabled ( true );
 					Bitmap bitmap = Bitmap.createBitmap ( view.getDrawingCache ( ) );
@@ -185,9 +220,14 @@ public class MainActivity extends AppCompatActivity {
 					bitmap.compress ( Bitmap.CompressFormat.PNG , 100 , ostream );
 					ostream.flush ( );
 					ostream.close ( );
-					Toast.makeText ( getApplicationContext ( ) , "saving : " + bitmap , Toast.LENGTH_SHORT ).show ( );
+//					Toast.makeText ( getApplicationContext ( ) , "saving : " + bitmap , Toast.LENGTH_SHORT ).show ( );
+					ffmpeg.loadBinary ( new LoadBinaryResponseHandler ( ) );
+					String[] cmd = new String[] { "-y" , "-i" , getPath ( MainActivity.this , uris ) , "-i" , local.getAbsolutePath ( ) , "-filter_complex" , "[1:v] scale=100:100 [ovrl]; [0:v][ovrl]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2" , videoOutput };
+					for ( int i = 0 ; i < cmd.length ; i++ ) {
+						Log.d ( getClass ( ).getSimpleName ( ) , "command :" + cmd[ i ] );
+					}
 
-					ffmpeg.execute ( new String[] { "-y" , "-i" , uris.getPath ( ) , "-i" , local.getAbsolutePath ( ) , "-filter_complex" , "[1:v] scale=1080:1920 [ovrl]; [0:v][ovrl]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2" , videoOutput.getAbsolutePath ( ) } , new ExecuteBinaryResponseHandler ( ) {
+					ffmpeg.execute ( cmd , new ExecuteBinaryResponseHandler ( ) {
 						@Override
 						public void onSuccess ( String message ) {
 							super.onSuccess ( message );
@@ -206,13 +246,15 @@ public class MainActivity extends AppCompatActivity {
 						@Override
 						public void onStart ( ) {
 							super.onStart ( );
-							Toast.makeText ( MainActivity.this , "save2" , Toast.LENGTH_SHORT ).show ( );
+							progressBar.setVisibility ( View.VISIBLE );
 
 						}
 
 						@Override
 						public void onFinish ( ) {
 							super.onFinish ( );
+							Toast.makeText ( MainActivity.this , "saved successfully" , Toast.LENGTH_SHORT ).show ( );
+							progressBar.setVisibility ( View.GONE );
 						}
 					} );
 				} catch ( Exception e ) {
@@ -223,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
 		} );
 
 	}
+
 
 	@Override
 	protected void onActivityResult ( int requestCode , int resultCode , @Nullable Intent data ) {
@@ -251,6 +294,85 @@ public class MainActivity extends AppCompatActivity {
 		ImageEntity entity = new ImageEntity ( layer , pica , motionView.getWidth ( ) , motionView.getHeight ( ) );
 
 		motionView.addEntityAndPosition ( entity );
+	}
+
+	public String getPath ( final Context context , final Uri uri ) {
+
+// DocumentProvider
+		if ( Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && DocumentsContract.isDocumentUri ( context , uri ) ) {
+
+			if ( isExternalStorageDocument ( uri ) ) {// ExternalStorageProvider
+				final String docId = DocumentsContract.getDocumentId ( uri );
+				final String[] split = docId.split ( ":" );
+				final String type = split[ 0 ];
+				String storageDefinition;
+
+
+				if ( "primary".equalsIgnoreCase ( type ) ) {
+
+					return Environment.getExternalStorageDirectory ( ) + "/" + split[ 1 ];
+
+				}
+				else {
+
+					if ( Environment.isExternalStorageRemovable ( ) ) {
+						storageDefinition = "EXTERNAL_STORAGE";
+
+					}
+					else {
+						storageDefinition = "SECONDARY_STORAGE";
+					}
+
+					return System.getenv ( storageDefinition ) + "/" + split[ 1 ];
+				}
+
+			}
+			else if ( isDownloadsDocument ( uri ) ) {// DownloadsProvider
+
+				final String id = DocumentsContract.getDocumentId ( uri );
+				final Uri contentUri = ContentUris.withAppendedId ( Uri.parse ( "content://downloads/public_downloads" ) , Long.valueOf ( id ) );
+
+				return getDataColumn ( context , contentUri , null , null );
+
+			}
+			else if ( isMediaDocument ( uri ) ) {// MediaProvider
+				final String docId = DocumentsContract.getDocumentId ( uri );
+				final String[] split = docId.split ( ":" );
+				final String type = split[ 0 ];
+
+				Uri contentUri = null;
+				if ( "image".equals ( type ) ) {
+					contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+				}
+				else if ( "video".equals ( type ) ) {
+					contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+				}
+				else if ( "audio".equals ( type ) ) {
+					contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+				}
+
+				final String selection = "_id=?";
+				final String[] selectionArgs = new String[] { split[ 1 ] };
+
+				return getDataColumn ( context , contentUri , selection , selectionArgs );
+			}
+
+		}
+		else if ( "content".equalsIgnoreCase ( uri.getScheme ( ) ) ) {// MediaStore (and general)
+
+// Return the remote address
+			if ( isGooglePhotosUri ( uri ) ) {
+				return uri.getLastPathSegment ( );
+			}
+
+			return getDataColumn ( context , uri , null , null );
+
+		}
+		else if ( "file".equalsIgnoreCase ( uri.getScheme ( ) ) ) {// File
+			return uri.getPath ( );
+		}
+
+		return null;
 	}
 
 	public class StickerAdapter extends RecyclerView.Adapter < StickerAdapter.StickerHolder > {
