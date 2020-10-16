@@ -3,10 +3,12 @@ package com.vt.videopro;
 import android.app.AlertDialog;
 import android.content.ContentUris;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.PointF;
 import android.media.MediaCodec;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -34,25 +36,31 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.flask.colorpicker.ColorPickerView;
+import com.flask.colorpicker.builder.ColorPickerClickListener;
+import com.flask.colorpicker.builder.ColorPickerDialogBuilder;
 import com.github.hiteshsondhi88.libffmpeg.ExecuteBinaryResponseHandler;
 import com.github.hiteshsondhi88.libffmpeg.FFmpeg;
 import com.github.hiteshsondhi88.libffmpeg.LoadBinaryResponseHandler;
+import com.vt.videopro.adapter.FontsAdapter;
+import com.vt.videopro.fragment.TextDialogFragment;
+import com.vt.videopro.stickerUtils.Font;
 import com.vt.videopro.stickerUtils.FontProvider;
 import com.vt.videopro.stickerUtils.ImageEntity;
 import com.vt.videopro.stickerUtils.Layer;
 import com.vt.videopro.stickerUtils.MotionEntity;
 import com.vt.videopro.stickerUtils.MotionView;
 import com.vt.videopro.stickerUtils.TextEntity;
+import com.vt.videopro.stickerUtils.TextLayer;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements TextDialogFragment.OnTextLayerCallback {
 
 	public static final int SELECT_STICKER_REQUEST_CODE = 123;
 	private final int[] stickerIds = { R.drawable.sticker_1 , R.drawable.sticker_3 , R.drawable.sticker_3 , R.drawable.sticker_4 , R.drawable.sticker_5 , R.drawable.sticker_6 , R.drawable.sticker_7 , R.drawable.sticker_8 , R.drawable.sticker_9 , R.drawable.sticker_10 , R.drawable.sticker_11 , R.drawable.sticker_12 };
@@ -71,7 +79,7 @@ public class MainActivity extends AppCompatActivity {
 	MotionView motionView;
 	RelativeLayout relative;
 	ConstraintLayout fullView;
-	LinearLayoutManager linearLayoutManager;
+	LinearLayout linearLayoutManager;
 	GridLayoutManager gridLayoutManager;
 	StickerAdapter stickerAdapter;
 	View textEntityEditPanel;
@@ -142,6 +150,8 @@ public class MainActivity extends AppCompatActivity {
 		super.onCreate ( savedInstanceState );
 		setContentView ( R.layout.activity_main );
 
+		this.fontProvider = new FontProvider ( getResources ( ) );
+
 		showVideo = findViewById ( R.id.show_video );
 		pickVideo = findViewById ( R.id.pick_video );
 		pickFrame = findViewById ( R.id.get_frame );
@@ -156,6 +166,20 @@ public class MainActivity extends AppCompatActivity {
 		ImageView emo = findViewById ( R.id.sticker_show );
 		ImageView save = findViewById ( R.id.save );
 		progressBar = findViewById ( R.id.progreess );
+		linearLayoutManager = findViewById ( R.id.main_motion_text_entity_edit_panel );
+
+		addText.setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View v ) {
+				addTextSticker ( );
+				if ( linearLayoutManager.getVisibility ( ) == View.VISIBLE ) {
+					linearLayoutManager.setVisibility ( View.GONE );
+				}
+				else {
+					linearLayoutManager.setVisibility ( View.VISIBLE );
+				}
+			}
+		} );
 
 		emo.setOnClickListener ( new View.OnClickListener ( ) {
 			@Override
@@ -264,6 +288,7 @@ public class MainActivity extends AppCompatActivity {
 			}
 		} );
 
+		initTextEntitiesListeners ( );
 	}
 
 
@@ -373,6 +398,165 @@ public class MainActivity extends AppCompatActivity {
 		}
 
 		return null;
+	}
+
+	@Nullable
+	private TextEntity currentTextEntity ( ) {
+		if ( motionView != null && motionView.getSelectedEntity ( ) instanceof TextEntity ) {
+			return ( ( TextEntity ) motionView.getSelectedEntity ( ) );
+		}
+		else {
+			return null;
+		}
+	}
+
+	protected void addTextSticker ( ) {
+		TextLayer textLayer = createTextLayer ( );
+		TextEntity textEntity = new TextEntity ( textLayer , motionView.getWidth ( ) , motionView.getHeight ( ) , fontProvider );
+		motionView.addEntityAndPosition ( textEntity );
+
+		// move text sticker up so that its not hidden under keyboard
+		PointF center = textEntity.absoluteCenter ( );
+		center.y = center.y * 0.5F;
+		textEntity.moveCenterTo ( center );
+
+		// redraw
+		motionView.invalidate ( );
+
+		startTextEntityEditing ( );
+	}
+
+	private void initTextEntitiesListeners ( ) {
+		findViewById ( R.id.text_entity_font_size_increase ).setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View view ) {
+				increaseTextEntitySize ( );
+			}
+		} );
+		findViewById ( R.id.text_entity_font_size_decrease ).setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View view ) {
+				decreaseTextEntitySize ( );
+			}
+		} );
+		findViewById ( R.id.text_entity_color_change ).setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View view ) {
+				changeTextEntityColor ( );
+			}
+		} );
+		findViewById ( R.id.text_entity_font_change ).setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View view ) {
+				changeTextEntityFont ( );
+			}
+		} );
+		findViewById ( R.id.text_entity_edit ).setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View view ) {
+				startTextEntityEditing ( );
+			}
+		} );
+	}
+
+	private void changeTextEntityColor ( ) {
+		TextEntity textEntity = currentTextEntity ( );
+		if ( textEntity == null ) {
+			return;
+		}
+
+		int initialColor = textEntity.getLayer ( ).getFont ( ).getColor ( );
+
+		ColorPickerDialogBuilder.with ( MainActivity.this ).setTitle ( "select_color" ).initialColor ( initialColor ).wheelType ( ColorPickerView.WHEEL_TYPE.CIRCLE ).density ( 8 ) // magic number
+				.setPositiveButton ( "ok" , new ColorPickerClickListener ( ) {
+					@Override
+					public void onClick ( DialogInterface dialog , int selectedColor , Integer[] allColors ) {
+						TextEntity textEntity = currentTextEntity ( );
+						if ( textEntity != null ) {
+							textEntity.getLayer ( ).getFont ( ).setColor ( selectedColor );
+							textEntity.updateEntity ( );
+							motionView.invalidate ( );
+						}
+					}
+				} ).setNegativeButton ( R.string.cancel , new DialogInterface.OnClickListener ( ) {
+			@Override
+			public void onClick ( DialogInterface dialog , int which ) {
+			}
+		} ).build ( ).show ( );
+	}
+
+	private void increaseTextEntitySize ( ) {
+		TextEntity textEntity = currentTextEntity ( );
+		if ( textEntity != null ) {
+			textEntity.getLayer ( ).getFont ( ).increaseSize ( TextLayer.Limits.FONT_SIZE_STEP );
+			textEntity.updateEntity ( );
+			motionView.invalidate ( );
+		}
+	}
+
+	private void decreaseTextEntitySize ( ) {
+		TextEntity textEntity = currentTextEntity ( );
+		if ( textEntity != null ) {
+			textEntity.getLayer ( ).getFont ( ).decreaseSize ( TextLayer.Limits.FONT_SIZE_STEP );
+			textEntity.updateEntity ( );
+			motionView.invalidate ( );
+		}
+	}
+
+	private void changeTextEntityFont ( ) {
+		final List < String > fonts = fontProvider.getFontNames ( );
+		FontsAdapter fontsAdapter = new FontsAdapter ( this , fonts , fontProvider );
+		new androidx.appcompat.app.AlertDialog.Builder ( this ).setTitle ( "Select font" ).setAdapter ( fontsAdapter , new DialogInterface.OnClickListener ( ) {
+			@Override
+			public void onClick ( DialogInterface dialogInterface , int which ) {
+				TextEntity textEntity = currentTextEntity ( );
+				if ( textEntity != null ) {
+					textEntity.getLayer ( ).getFont ( ).setTypeface ( fonts.get ( which ) );
+					textEntity.updateEntity ( );
+					motionView.invalidate ( );
+				}
+			}
+		} ).show ( );
+	}
+
+	private void startTextEntityEditing ( ) {
+
+		TextEntity textEntity = currentTextEntity ( );
+		if ( textEntity != null ) {
+			TextDialogFragment fragment = TextDialogFragment.getInstance ( textEntity.getLayer ( ).getText ( ) );
+			fragment.show ( getSupportFragmentManager ( ) , TextDialogFragment.class.getName ( ) );
+		}
+	}
+
+
+	private TextLayer createTextLayer ( ) {
+		TextLayer textLayer = new TextLayer ( );
+		Font font = new Font ( );
+
+		font.setColor ( TextLayer.Limits.INITIAL_FONT_COLOR );
+		font.setSize ( TextLayer.Limits.INITIAL_FONT_SIZE );
+		font.setTypeface ( fontProvider.getDefaultFontName ( ) );
+
+		textLayer.setFont ( font );
+
+		if ( BuildConfig.DEBUG ) {
+			textLayer.setText ( "Hello, world :))" );
+		}
+
+		return textLayer;
+	}
+
+	@Override
+	public void textChanged ( @NonNull String text ) {
+		TextEntity textEntity = currentTextEntity ( );
+		if ( textEntity != null ) {
+			TextLayer textLayer = textEntity.getLayer ( );
+			if ( ! text.equals ( textLayer.getText ( ) ) ) {
+				textLayer.setText ( text );
+				textEntity.updateEntity ( );
+				motionView.invalidate ( );
+			}
+		}
 	}
 
 	public class StickerAdapter extends RecyclerView.Adapter < StickerAdapter.StickerHolder > {
