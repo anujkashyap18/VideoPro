@@ -1,6 +1,5 @@
 package com.vt.videopro;
 
-import android.app.AlertDialog;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -8,8 +7,8 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.PointF;
-import android.media.MediaCodec;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -21,10 +20,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.MediaController;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -65,17 +63,9 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 	public static final int SELECT_STICKER_REQUEST_CODE = 123;
 	private final int[] stickerIds = { R.drawable.sticker_1 , R.drawable.sticker_3 , R.drawable.sticker_3 , R.drawable.sticker_4 , R.drawable.sticker_5 , R.drawable.sticker_6 , R.drawable.sticker_7 , R.drawable.sticker_8 , R.drawable.sticker_9 , R.drawable.sticker_10 , R.drawable.sticker_11 , R.drawable.sticker_12 };
 	VideoView showVideo;
-	MediaController controller;
 	ImageView pickVideo, pickFrame;
 	Uri uris;
-	int current;
 	TextView addText;
-	EditText custumAddText;
-	AlertDialog.Builder alertDialogBuilder;
-	AlertDialog dialog;
-	LayoutInflater inflater;
-	Intent intent;
-	MediaCodec decoder;
 	MotionView motionView;
 	RelativeLayout relative;
 	ConstraintLayout fullView;
@@ -83,6 +73,7 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 	GridLayoutManager gridLayoutManager;
 	StickerAdapter stickerAdapter;
 	View textEntityEditPanel;
+	ConstraintLayout layoutTouch;
 	private final MotionView.MotionViewCallback motionViewCallback = new MotionView.MotionViewCallback ( ) {
 		@Override
 		public void onEntitySelected ( @Nullable MotionEntity entity ) {
@@ -105,9 +96,9 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 	ImageView emo;
 	List < Integer > lists = new ArrayList <> ( );
 	FFmpeg ffmpeg;
+	ProgressBar progressBar;
 	private boolean weAreInterestedInThisTrack;
 	private FontProvider fontProvider;
-	ProgressBar progressBar;
 
 	public static boolean isExternalStorageDocument ( Uri uri ) {
 		return "com.android.externalstorage.documents".equals ( uri.getAuthority ( ) );
@@ -166,6 +157,23 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 		ImageView emo = findViewById ( R.id.sticker_show );
 		ImageView save = findViewById ( R.id.save );
 		progressBar = findViewById ( R.id.progreess );
+		layoutTouch = findViewById ( R.id.layout_touch );
+		layoutTouch.setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View view ) {
+				InputMethodManager inputMethodManagerManager = ( InputMethodManager ) view.getContext ( ).getSystemService ( Context.INPUT_METHOD_SERVICE );
+
+				inputMethodManagerManager.hideSoftInputFromWindow ( view.getWindowToken ( ) , 0 );
+//				linearLayoutManager.setVisibility ( View.GONE );
+			}
+		} );
+
+		showVideo.setOnClickListener ( new View.OnClickListener ( ) {
+			@Override
+			public void onClick ( View v ) {
+//				linearLayoutManager.setVisibility ( View.VISIBLE );
+			}
+		} );
 		linearLayoutManager = findViewById ( R.id.main_motion_text_entity_edit_panel );
 
 		addText.setOnClickListener ( new View.OnClickListener ( ) {
@@ -246,7 +254,7 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 					ostream.close ( );
 //					Toast.makeText ( getApplicationContext ( ) , "saving : " + bitmap , Toast.LENGTH_SHORT ).show ( );
 					ffmpeg.loadBinary ( new LoadBinaryResponseHandler ( ) );
-					String[] cmd = new String[] { "-y" , "-i" , getPath ( MainActivity.this , uris ) , "-i" , local.getAbsolutePath ( ) , "-filter_complex" , "[1:v] scale=100:100 [ovrl]; [0:v][ovrl]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2" , videoOutput };
+					String[] cmd = new String[] { "-y" , "-i" , getPath ( MainActivity.this , uris ) , "-i" , local.getAbsolutePath ( ) , "-filter_complex" , "[1:v] scale=250:250 [ovrl]; [0:v][ovrl]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2" , videoOutput };
 					for ( int i = 0 ; i < cmd.length ; i++ ) {
 						Log.d ( getClass ( ).getSimpleName ( ) , "command :" + cmd[ i ] );
 					}
@@ -533,14 +541,14 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 		TextLayer textLayer = new TextLayer ( );
 		Font font = new Font ( );
 
-		font.setColor ( TextLayer.Limits.INITIAL_FONT_COLOR );
+		font.setColor ( Color.RED );
 		font.setSize ( TextLayer.Limits.INITIAL_FONT_SIZE );
 		font.setTypeface ( fontProvider.getDefaultFontName ( ) );
 
 		textLayer.setFont ( font );
 
 		if ( BuildConfig.DEBUG ) {
-			textLayer.setText ( "Hello, world :))" );
+			textLayer.setText ( "Write Something.." );
 		}
 
 		return textLayer;
