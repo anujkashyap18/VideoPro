@@ -10,6 +10,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PointF;
 import android.media.MediaPlayer;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -171,7 +172,7 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 		showVideo.setOnClickListener ( new View.OnClickListener ( ) {
 			@Override
 			public void onClick ( View v ) {
-//				linearLayoutManager.setVisibility ( View.VISIBLE );
+				linearLayoutManager.setVisibility ( View.GONE );
 			}
 		} );
 		linearLayoutManager = findViewById ( R.id.main_motion_text_entity_edit_panel );
@@ -230,7 +231,6 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 			@Override
 			public void onClick ( View v ) {
 
-
 				ffmpeg = FFmpeg.getInstance ( MainActivity.this );
 
 				try {
@@ -239,7 +239,7 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 					if ( ! basePath.exists ( ) ) {
 						basePath.mkdirs ( );
 					}
-					String videoOutput = Environment.getExternalStorageDirectory ( ).getAbsolutePath ( ) + "/Download/" + System.currentTimeMillis ( ) + "test_video.mp4";
+					final String videoOutput = Environment.getExternalStorageDirectory ( ).getAbsolutePath ( ) + "/Download/" + System.currentTimeMillis ( ) + "test_video.mp4";
 
 					View view = relative;
 					view.setDrawingCacheEnabled ( true );
@@ -286,9 +286,21 @@ public class MainActivity extends AppCompatActivity implements TextDialogFragmen
 						public void onFinish ( ) {
 							super.onFinish ( );
 							Toast.makeText ( MainActivity.this , "saved successfully" , Toast.LENGTH_SHORT ).show ( );
+							MediaScannerConnection.scanFile ( MainActivity.this , new String[] { videoOutput } , null , new MediaScannerConnection.MediaScannerConnectionClient ( ) {
+								@Override
+								public void onMediaScannerConnected ( ) {
+
+								}
+
+								@Override
+								public void onScanCompleted ( String path , Uri uri ) {
+
+								}
+							} );
 							progressBar.setVisibility ( View.GONE );
 						}
 					} );
+
 				} catch ( Exception e ) {
 					e.printStackTrace ( );
 				}
